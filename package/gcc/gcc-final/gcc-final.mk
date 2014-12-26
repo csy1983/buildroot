@@ -5,8 +5,8 @@
 ################################################################################
 
 GCC_FINAL_VERSION = $(GCC_VERSION)
-GCC_FINAL_SITE    = $(GCC_SITE)
-GCC_FINAL_SOURCE  = $(GCC_SOURCE)
+GCC_FINAL_SITE = $(GCC_SITE)
+GCC_FINAL_SOURCE = $(GCC_SOURCE)
 
 HOST_GCC_FINAL_DEPENDENCIES = \
 	$(HOST_GCC_COMMON_DEPENDENCIES) \
@@ -27,42 +27,48 @@ HOST_GCC_FINAL_SUBDIR = build
 HOST_GCC_FINAL_PRE_CONFIGURE_HOOKS += HOST_GCC_CONFIGURE_SYMLINK
 
 define  HOST_GCC_FINAL_CONFIGURE_CMDS
-        (cd $(HOST_GCC_FINAL_SRCDIR) && rm -rf config.cache; \
-                $(HOST_CONFIGURE_OPTS) \
-                CFLAGS="$(HOST_CFLAGS)" \
-                LDFLAGS="$(HOST_LDFLAGS)" \
-                $(HOST_GCC_FINAL_CONF_ENV) \
-                ./configure \
-                --prefix="$(HOST_DIR)/usr" \
-                --sysconfdir="$(HOST_DIR)/etc" \
-                --enable-shared --enable-static \
-                $(QUIET) $(HOST_GCC_FINAL_CONF_OPT) \
-        )
+	(cd $(HOST_GCC_FINAL_SRCDIR) && rm -rf config.cache; \
+		$(HOST_CONFIGURE_OPTS) \
+		CFLAGS="$(HOST_CFLAGS)" \
+		LDFLAGS="$(HOST_LDFLAGS)" \
+		$(HOST_GCC_FINAL_CONF_ENV) \
+		./configure \
+		--prefix="$(HOST_DIR)/usr" \
+		--sysconfdir="$(HOST_DIR)/etc" \
+		--enable-static \
+		$(QUIET) $(HOST_GCC_FINAL_CONF_OPTS) \
+	)
 endef
 
 
 # Languages supported by the cross-compiler
 GCC_FINAL_CROSS_LANGUAGES-y = c
 GCC_FINAL_CROSS_LANGUAGES-$(BR2_INSTALL_LIBSTDCPP) += c++
-GCC_FINAL_CROSS_LANGUAGES-$(BR2_INSTALL_FORTRAN) += fortran
-GCC_FINAL_CROSS_LANGUAGES-$(BR2_INSTALL_OBJC)    += objc
 GCC_FINAL_CROSS_LANGUAGES = $(subst $(space),$(comma),$(GCC_FINAL_CROSS_LANGUAGES-y))
 
-HOST_GCC_FINAL_CONF_OPT = \
-	$(HOST_GCC_COMMON_CONF_OPT) \
+HOST_GCC_FINAL_CONF_OPTS = \
+	$(HOST_GCC_COMMON_CONF_OPTS) \
 	--enable-languages=$(GCC_FINAL_CROSS_LANGUAGES) \
 	$(DISABLE_LARGEFILE) \
+	--enable-poison-system-directories \
 	--with-build-time-tools=$(HOST_DIR)/usr/$(GNU_TARGET_NAME)/bin
 
-ifeq ($(BR2_GCC_ENABLE_OPENMP),y)
-HOST_GCC_FINAL_CONF_OPT += --enable-libgomp
+# Disable shared libs like libstdc++ if we do static since it confuses linking
+ifeq ($(BR2_STATIC_LIBS),y)
+HOST_GCC_FINAL_CONF_OPTS += --disable-shared
 else
-HOST_GCC_FINAL_CONF_OPT += --disable-libgomp
+HOST_GCC_FINAL_CONF_OPTS += --enable-shared
+endif
+
+ifeq ($(BR2_GCC_ENABLE_OPENMP),y)
+HOST_GCC_FINAL_CONF_OPTS += --enable-libgomp
+else
+HOST_GCC_FINAL_CONF_OPTS += --disable-libgomp
 endif
 
 # End with user-provided options, so that they can override previously
 # defined options.
-HOST_GCC_FINAL_CONF_OPT += \
+HOST_GCC_FINAL_CONF_OPTS += \
 	$(call qstrip,$(BR2_EXTRA_GCC_CONFIG_OPTIONS))
 
 HOST_GCC_FINAL_CONF_ENV = \
@@ -124,14 +130,6 @@ ifeq ($(BR2_GCC_ENABLE_OPENMP),y)
 HOST_GCC_FINAL_USR_LIBS += libgomp
 endif
 
-ifeq ($(BR2_INSTALL_FORTRAN),y)
-HOST_GCC_FINAL_USR_LIBS += libgfortran
-endif
-
-ifeq ($(BR2_INSTALL_OBJC),y)
-HOST_GCC_FINAL_USR_LIBS += libobjc
-endif
-
 ifeq ($(BR2_GCC_ENABLE_LIBMUDFLAP),y)
 ifeq ($(BR2_TOOLCHAIN_HAS_THREADS),y)
 HOST_GCC_FINAL_USR_LIBS += libmudflapth
@@ -141,16 +139,28 @@ endif
 endif
 
 ifneq ($(HOST_GCC_FINAL_USR_LIBS),)
-define HOST_GCC_FINAL_INSTALL_USR_LIBS
-	mkdir -p $(TARGET_DIR)/usr/lib
+define HOST_GCC_FINAL_INSTALL_STATIC_LIBS
+	for i in $(HOST_GCC_FINAL_USR_LIBS) ; do \
+		cp -dpf $(HOST_DIR)/usr/$(GNU_TARGET_NAME)/lib*/$${i}.a \
+			$(STAGING_DIR)/usr/lib/ ; \
+	done
+endef
+
+ifeq ($(BR2_STATIC_LIBS),)
+define HOST_GCC_FINAL_INSTALL_SHARED_LIBS
 	for i in $(HOST_GCC_FINAL_USR_LIBS) ; do \
 		cp -dpf $(HOST_DIR)/usr/$(GNU_TARGET_NAME)/lib*/$${i}.so* \
-			$(STAGING_DIR)/usr/lib/ ; \
-		cp -dpf $(HOST_DIR)/usr/$(GNU_TARGET_NAME)/lib*/$${i}.a \
 			$(STAGING_DIR)/usr/lib/ ; \
 		cp -dpf $(HOST_DIR)/usr/$(GNU_TARGET_NAME)/lib*/$${i}.so* \
 			$(TARGET_DIR)/usr/lib/ ; \
 	done
+endef
+endif
+
+define HOST_GCC_FINAL_INSTALL_USR_LIBS
+	mkdir -p $(TARGET_DIR)/usr/lib
+	$(HOST_GCC_FINAL_INSTALL_STATIC_LIBS)
+	$(HOST_GCC_FINAL_INSTALL_SHARED_LIBS)
 endef
 HOST_GCC_FINAL_POST_INSTALL_HOOKS += HOST_GCC_FINAL_INSTALL_USR_LIBS
 endif

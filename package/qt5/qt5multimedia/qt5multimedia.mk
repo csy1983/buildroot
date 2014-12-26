@@ -39,7 +39,7 @@ define QT5MULTIMEDIA_INSTALL_STAGING_CMDS
 	$(QT5_LA_PRL_FILES_FIXUP)
 endef
 
-ifeq ($(BR2_PREFER_STATIC_LIB),)
+ifeq ($(BR2_STATIC_LIBS),)
 ifeq ($(BR2_PACKAGE_GST_PLUGINS_BASE),y)
 define QT5MULTIMEDIA_INSTALL_TARGET_QGSTTOOLS_LIB
 	cp -dpf $(STAGING_DIR)/usr/lib/libqgsttools*.so.* $(TARGET_DIR)/usr/lib
@@ -53,9 +53,15 @@ define QT5MULTIMEDIA_INSTALL_TARGET_LIBS
 endef
 endif
 
+ifeq ($(BR2_PACKAGE_QT5DECLARATIVE_QUICK),y)
+define QT5MULTIMEDIA_INSTALL_TARGET_QMLS
+	cp -dpfr $(STAGING_DIR)/usr/qml/QtMultimedia $(TARGET_DIR)/usr/qml/
+endef
+endif
+
 define QT5MULTIMEDIA_INSTALL_TARGET_CMDS
-	cp -dpfr $(STAGING_DIR)/usr/qml/* $(TARGET_DIR)/usr/qml
 	$(QT5MULTIMEDIA_INSTALL_TARGET_LIBS)
+	$(QT5MULTIMEDIA_INSTALL_TARGET_QMLS)
 endef
 
 $(eval $(generic-package))

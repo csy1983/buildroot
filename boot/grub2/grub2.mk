@@ -5,7 +5,7 @@
 ################################################################################
 
 GRUB2_VERSION = 2.00
-GRUB2_SITE = $(BR2_GNU_MIRROR)/grub/
+GRUB2_SITE = $(BR2_GNU_MIRROR)/grub
 GRUB2_SOURCE = grub-$(GRUB2_VERSION).tar.xz
 GRUB2_LICENSE = GPLv3+
 GRUB2_LICENSE_FILES = COPYING
@@ -50,7 +50,7 @@ GRUB2_CONF_ENV = \
 	TARGET_CFLAGS="$(TARGET_CFLAGS)" \
 	TARGET_CPPFLAGS="$(TARGET_CPPFLAGS)"
 
-GRUB2_CONF_OPT = \
+GRUB2_CONF_OPTS = \
 	--target=$(GRUB2_TARGET) \
 	--with-platform=$(GRUB2_PLATFORM) \
 	--disable-grub-mkfont \
@@ -65,7 +65,7 @@ GRUB2_CONF_OPT = \
 # directory, and the image generation process (below) will use the
 # grub-mkimage tool and Grub2 modules from the host directory.
 
-GRUB2_INSTALL_TARGET_OPT = DESTDIR=$(HOST_DIR) install
+GRUB2_INSTALL_TARGET_OPTS = DESTDIR=$(HOST_DIR) install
 
 define GRUB2_IMAGE_INSTALLATION
 	mkdir -p $(dir $(GRUB2_IMAGE))

@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-OPEN2300_SITE = http://www.lavrsen.dk/svn/open2300/trunk/
+OPEN2300_SITE = http://www.lavrsen.dk/svn/open2300/trunk
 OPEN2300_SITE_METHOD = svn
 OPEN2300_VERSION = 12
 OPEN2300_LICENSE = GPLv2
@@ -17,9 +17,9 @@ OPEN2300_LDFLAGS = $(TARGET_LDFLAGS)
 
 ifeq ($(BR2_PACKAGE_MYSQL),y)
 	OPEN2300_DEPENDENCIES += mysql
-	OPEN2300_BINS         += mysql2300 mysqlhistlog2300
-	OPEN2300_CFLAGS       += -I$(STAGING_DIR)/usr/include/mysql
-	OPEN2300_LDFLAGS      += -L$(STAGING_DIR)/usr/lib/mysql -lmysqlclient
+	OPEN2300_BINS += mysql2300 mysqlhistlog2300
+	OPEN2300_CFLAGS += -I$(STAGING_DIR)/usr/include/mysql
+	OPEN2300_LDFLAGS += -L$(STAGING_DIR)/usr/lib/mysql -lmysqlclient
 endif
 
 define OPEN2300_BUILD_CMDS

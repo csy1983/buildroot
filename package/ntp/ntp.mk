@@ -5,33 +5,45 @@
 ################################################################################
 
 NTP_VERSION_MAJOR = 4.2
-NTP_VERSION = $(NTP_VERSION_MAJOR).6p5
+NTP_VERSION = $(NTP_VERSION_MAJOR).8
 NTP_SITE = http://www.eecis.udel.edu/~ntp/ntp_spool/ntp4/ntp-$(NTP_VERSION_MAJOR)
+NTP_DEPENDENCIES = host-pkgconf libevent
+# For 0001-fix-ntp-keygen-without-openssl.patch
+NTP_AUTORECONF = YES
 NTP_LICENSE = ntp license
 NTP_LICENSE_FILES = COPYRIGHT
 NTP_CONF_ENV = ac_cv_lib_md5_MD5Init=no
+NTP_CONF_OPTS = \
+	--with-shared \
+	--program-transform-name=s,,, \
+	--disable-tickadj \
+	--with-yielding-select=yes \
+	--disable-local-libevent
 
 ifneq ($(BR2_INET_IPV6),y)
 	NTP_CONF_ENV += isc_cv_have_in6addr_any=no
 endif
 
-NTP_CONF_OPT = --with-shared \
-		--program-transform-name=s,,, \
-		--disable-tickadj
-
 ifeq ($(BR2_PACKAGE_OPENSSL),y)
-	NTP_CONF_OPT += --with-crypto
+	NTP_CONF_OPTS += --with-crypto
 	NTP_DEPENDENCIES += openssl
 else
-	NTP_CONF_OPT += --without-crypto
+	NTP_CONF_OPTS += --without-crypto --disable-openssl-random
 endif
 
 ifeq ($(BR2_PACKAGE_NTP_NTPSNMPD),y)
-	NTP_CONF_OPT += \
+	NTP_CONF_OPTS += \
 		--with-net-snmp-config=$(STAGING_DIR)/usr/bin/net-snmp-config
 	NTP_DEPENDENCIES += netsnmp
 else
-	NTP_CONF_OPT += --without-ntpsnmpd
+	NTP_CONF_OPTS += --without-ntpsnmpd
+endif
+
+ifeq ($(BR2_PACKAGE_NTP_NTPD_ATOM_PPS),y)
+	NTP_CONF_OPTS += --enable-ATOM
+	NTP_DEPENDENCIES += pps-tools
+else
+	NTP_CONF_OPTS += --disable-ATOM
 endif
 
 define NTP_PATCH_FIXUPS

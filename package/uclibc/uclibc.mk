@@ -37,16 +37,37 @@ ifndef UCLIBC_CONFIG_FILE
 UCLIBC_CONFIG_FILE = $(call qstrip,$(BR2_UCLIBC_CONFIG))
 endif
 
+UCLIBC_KCONFIG_FILE = $(UCLIBC_CONFIG_FILE)
+
+UCLIBC_KCONFIG_OPTS = \
+	$(UCLIBC_MAKE_FLAGS) \
+	PREFIX=$(STAGING_DIR) \
+	DEVEL_PREFIX=/usr/ \
+	RUNTIME_PREFIX=$(STAGING_DIR)/ \
+
 UCLIBC_TARGET_ARCH = $(call qstrip,$(BR2_UCLIBC_TARGET_ARCH))
 
-ifeq ($(GENERATE_LOCALE),)
+UCLIBC_GENERATE_LOCALES = $(call qstrip,$(BR2_GENERATE_LOCALE))
+
+ifeq ($(UCLIBC_GENERATE_LOCALES),)
 # We need at least one locale
 UCLIBC_LOCALES = en_US
 else
 # Strip out the encoding part of locale names, if any
-UCLIBC_LOCALES = $(foreach locale,$(GENERATE_LOCALE),\
+UCLIBC_LOCALES = $(foreach locale,$(UCLIBC_GENERATE_LOCALES),\
 		   $(firstword $(subst .,$(space),$(locale))))
 endif
+
+#
+# ARC definitions
+#
+
+ifeq ($(UCLIBC_TARGET_ARCH),arc)
+UCLIBC_ARC_TYPE = CONFIG_$(call qstrip,$(BR2_UCLIBC_ARC_TYPE))
+define UCLIBC_ARC_TYPE_CONFIG
+	$(call KCONFIG_ENABLE_OPT,$(UCLIBC_ARC_TYPE),$(@D)/.config)
+endef
+endif # arc
 
 #
 # ARM definitions
@@ -113,7 +134,7 @@ ifeq ($(UCLIBC_TARGET_ARCH),sparc)
 UCLIBC_SPARC_TYPE = CONFIG_SPARC_$(call qstrip,$(BR2_UCLIBC_SPARC_TYPE))
 define UCLIBC_SPARC_TYPE_CONFIG
 	$(SED) 's/^\(CONFIG_[^_]*[_]*SPARC[^=]*\)=.*/# \1 is not set/g' \
-		 $(@D)/.config
+		$(@D)/.config
 	$(call KCONFIG_ENABLE_OPT,$(UCLIBC_SPARC_TYPE),$(@D)/.config)
 endef
 endif # sparc
@@ -374,13 +395,13 @@ UCLIBC_WCHAR_CONFIG = $(call KCONFIG_DISABLE_OPT,UCLIBC_HAS_WCHAR,$(@D)/.config)
 endif
 
 #
-# strip
+# static/shared libs
 #
 
-ifeq ($(BR2_STRIP_none),y)
-UCLIBC_STRIP_CONFIG = $(call KCONFIG_DISABLE_OPT,DOSTRIP,$(@D)/.config)
+ifeq ($(BR2_STATIC_LIBS),y)
+UCLIBC_SHARED_LIBS_CONFIG = $(call KCONFIG_DISABLE_OPT,HAVE_SHARED,$(@D)/.config)
 else
-UCLIBC_STRIP_CONFIG = $(call KCONFIG_ENABLE_OPT,DOSTRIP,$(@D)/.config)
+UCLIBC_SHARED_LIBS_CONFIG = $(call KCONFIG_ENABLE_OPT,HAVE_SHARED,$(@D)/.config)
 endif
 
 #
@@ -393,8 +414,7 @@ UCLIBC_MAKE_FLAGS = \
 	UCLIBC_EXTRA_CFLAGS="$(UCLIBC_EXTRA_CFLAGS) $(TARGET_ABI)" \
 	HOSTCC="$(HOSTCC)"
 
-define UCLIBC_SETUP_DOT_CONFIG
-	$(INSTALL) -m 0644 $(UCLIBC_CONFIG_FILE) $(@D)/.config
+define UCLIBC_KCONFIG_FIXUP_CMDS
 	$(call KCONFIG_SET_OPT,CROSS_COMPILER_PREFIX,"$(TARGET_CROSS)",$(@D)/.config)
 	$(call KCONFIG_ENABLE_OPT,TARGET_$(UCLIBC_TARGET_ARCH),$(@D)/.config)
 	$(call KCONFIG_SET_OPT,TARGET_ARCH,"$(UCLIBC_TARGET_ARCH)",$(@D)/.config)
@@ -403,6 +423,7 @@ define UCLIBC_SETUP_DOT_CONFIG
 	$(call KCONFIG_SET_OPT,DEVEL_PREFIX,"/usr",$(@D)/.config)
 	$(call KCONFIG_SET_OPT,SHARED_LIB_LOADER_PREFIX,"/lib",$(@D)/.config)
 	$(UCLIBC_MMU_CONFIG)
+	$(UCLIBC_ARC_TYPE_CONFIG)
 	$(UCLIBC_ARM_ABI_CONFIG)
 	$(UCLIBC_ARM_BX_CONFIG)
 	$(UCLIBC_MIPS_ABI_CONFIG)
@@ -423,28 +444,7 @@ define UCLIBC_SETUP_DOT_CONFIG
 	$(UCLIBC_THREAD_DEBUG_CONFIG)
 	$(UCLIBC_LOCALE_CONFIG)
 	$(UCLIBC_WCHAR_CONFIG)
-	$(UCLIBC_STRIP_CONFIG)
-	yes "" | $(MAKE1) -C $(@D) \
-		$(UCLIBC_MAKE_FLAGS) \
-		PREFIX=$(STAGING_DIR) \
-		DEVEL_PREFIX=/usr/ \
-		RUNTIME_PREFIX=$(STAGING_DIR) \
-		oldconfig
-endef
-
-define UCLIBC_CONFIGURE_CMDS
-	$(UCLIBC_SETUP_DOT_CONFIG)
-	$(MAKE1) -C $(UCLIBC_DIR) \
-		$(UCLIBC_MAKE_FLAGS) \
-		PREFIX=$(STAGING_DIR) \
-		DEVEL_PREFIX=/usr/ \
-		RUNTIME_PREFIX=$(STAGING_DIR) \
-		headers startfiles \
-		install_headers install_startfiles
-	$(TARGET_CROSS)gcc -nostdlib \
-		-nostartfiles -shared -x c /dev/null -o $(STAGING_DIR)/usr/lib/libc.so
-	$(TARGET_CROSS)gcc -nostdlib \
-		-nostartfiles -shared -x c /dev/null -o $(STAGING_DIR)/usr/lib/libm.so
+	$(UCLIBC_SHARED_LIBS_CONFIG)
 endef
 
 ifeq ($(BR2_UCLIBC_INSTALL_TEST_SUITE),y)
@@ -471,16 +471,11 @@ else
 endif
 
 define UCLIBC_BUILD_CMDS
-	$(UCLIBC_MAKE) -C $(@D) \
-		$(UCLIBC_MAKE_FLAGS) \
-		PREFIX= \
-		DEVEL_PREFIX=/ \
-		RUNTIME_PREFIX=/ \
-		all
+	$(UCLIBC_MAKE) -C $(@D) $(UCLIBC_MAKE_FLAGS) headers
+	$(UCLIBC_MAKE) -C $(@D) $(UCLIBC_MAKE_FLAGS)
 	$(MAKE) -C $(@D)/utils \
 		PREFIX=$(HOST_DIR) \
 		HOSTCC="$(HOSTCC)" hostutils
-	$(UCLIBC_BUILD_TEST_SUITE)
 endef
 
 ifeq ($(BR2_UCLIBC_INSTALL_TEST_SUITE),y)
@@ -510,11 +505,12 @@ define UCLIBC_INSTALL_TARGET_CMDS
 		RUNTIME_PREFIX=/ \
 		install_runtime
 	$(UCLIBC_INSTALL_UTILS_TARGET)
+	$(UCLIBC_BUILD_TEST_SUITE)
 	$(UCLIBC_INSTALL_TEST_SUITE)
 endef
 
 # STATIC has no ld* tools, only getconf
-ifeq ($(BR2_PREFER_STATIC_LIB),)
+ifeq ($(BR2_STATIC_LIBS),)
 define UCLIBC_INSTALL_UTILS_STAGING
 	$(INSTALL) -D -m 0755 $(@D)/utils/ldd.host $(HOST_DIR)/usr/bin/ldd
 	ln -sf ldd $(HOST_DIR)/usr/bin/$(GNU_TARGET_NAME)-ldd
@@ -533,19 +529,4 @@ define UCLIBC_INSTALL_STAGING_CMDS
 	$(UCLIBC_INSTALL_UTILS_STAGING)
 endef
 
-uclibc-menuconfig: uclibc-patch
-	$(MAKE1) -C $(UCLIBC_DIR) \
-		$(UCLIBC_MAKE_FLAGS) \
-		PREFIX=$(STAGING_DIR) \
-		DEVEL_PREFIX=/usr/ \
-		RUNTIME_PREFIX=$(STAGING_DIR)/ \
-		menuconfig
-	rm -f $(UCLIBC_DIR)/.stamp_{configured,built,target_installed,staging_installed}
-
-$(eval $(generic-package))
-
-uclibc-update-config: $(UCLIBC_DIR)/.stamp_configured
-	cp -f $(UCLIBC_DIR)/.config $(UCLIBC_CONFIG_FILE)
-
-# Before uClibc is built, we must have the second stage cross-compiler
-$(UCLIBC_TARGET_BUILD): | host-gcc-intermediate
+$(eval $(kconfig-package))

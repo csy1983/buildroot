@@ -13,7 +13,7 @@
 # In terms of implementation, this generic infrastructure requires the
 # .mk file to specify:
 #
-#   1. Metadata informations about the package: name, version,
+#   1. Metadata information about the package: name, version,
 #      download URL, etc.
 #
 #   2. Description of the commands to be executed to configure, build
@@ -56,11 +56,11 @@ endef
 GLOBAL_INSTRUMENTATION_HOOKS += step_time
 
 # User-supplied script
+ifneq ($(BR2_INSTRUMENTATION_SCRIPTS),)
 define step_user
 	@$(foreach user_hook, $(BR2_INSTRUMENTATION_SCRIPTS), \
 		$(EXTRA_ENV) $(user_hook) "$(1)" "$(2)" "$(3)"$(sep))
 endef
-ifneq ($(BR2_INSTRUMENTATION_SCRIPTS),)
 GLOBAL_INSTRUMENTATION_HOOKS += step_user
 endif
 
@@ -146,14 +146,14 @@ $(BUILD_DIR)/%/.stamp_patched:
 	@$(call step_start,patch)
 	@$(call MESSAGE,"Patching")
 	$(foreach hook,$($(PKG)_PRE_PATCH_HOOKS),$(call $(hook))$(sep))
-	$(foreach p,$($(PKG)_PATCH),support/scripts/apply-patches.sh $(@D) $(DL_DIR) $(notdir $(p))$(sep))
+	$(foreach p,$($(PKG)_PATCH),$(APPLY_PATCHES) $(@D) $(DL_DIR) $(notdir $(p))$(sep))
 	$(Q)( \
 	for D in $(PATCH_BASE_DIRS); do \
 	  if test -d $${D}; then \
 	    if test -d $${D}/$($(PKG)_VERSION); then \
-	      support/scripts/apply-patches.sh $(@D) $${D}/$($(PKG)_VERSION) \*.patch \*.patch.$(ARCH) || exit 1; \
+	      $(APPLY_PATCHES) $(@D) $${D}/$($(PKG)_VERSION) \*.patch \*.patch.$(ARCH) || exit 1; \
 	    else \
-	      support/scripts/apply-patches.sh $(@D) $${D} \*.patch \*.patch.$(ARCH) || exit 1; \
+	      $(APPLY_PATCHES) $(@D) $${D} \*.patch \*.patch.$(ARCH) || exit 1; \
 	    fi; \
 	  fi; \
 	done; \
@@ -161,6 +161,11 @@ $(BUILD_DIR)/%/.stamp_patched:
 	$(foreach hook,$($(PKG)_POST_PATCH_HOOKS),$(call $(hook))$(sep))
 	$(Q)touch $@
 	@$(call step_end,patch)
+
+# Check that all directories specified in BR2_GLOBAL_PATCH_DIR exist.
+$(foreach dir,$(call qstrip,$(BR2_GLOBAL_PATCH_DIR)),\
+	$(if $(wildcard $(dir)),,\
+		$(error BR2_GLOBAL_PATCH_DIR contains nonexistent directory $(dir))))
 
 # Configure
 $(BUILD_DIR)/%/.stamp_configured:
@@ -268,7 +273,7 @@ endef
 # generic package
 #
 #  argument 1 is the lowercase package name
-#  argument 2 is the uppercase package name, including an HOST_ prefix
+#  argument 2 is the uppercase package name, including a HOST_ prefix
 #             for host packages
 #  argument 3 is the uppercase package name, without the HOST_ prefix
 #             for host packages
@@ -304,7 +309,7 @@ define inner-generic-package
 # already defined. For some variables (version, source, site and
 # subdir), if they are undefined, we try to see if a variable without
 # the HOST_ prefix is defined. If so, we use such a variable, so that
-# these informations have only to be specified once, for both the
+# this information has only to be specified once, for both the
 # target and host packages of a given .mk file.
 
 $(2)_TYPE                       =  $(4)
@@ -318,15 +323,15 @@ $(2)_RAWNAME			=  $$(patsubst host-%,%,$(1))
 # version control system branch or tag, for example remotes/origin/1_10_stable.
 ifndef $(2)_VERSION
  ifdef $(3)_VERSION
-  $(2)_DL_VERSION = $$($(3)_VERSION)
-  $(2)_VERSION := $$(subst /,_,$$($(3)_VERSION))
+  $(2)_DL_VERSION := $$(strip $$($(3)_VERSION))
+  $(2)_VERSION := $$(subst /,_,$$(strip $$($(3)_VERSION)))
  else
   $(2)_VERSION = undefined
   $(2)_DL_VERSION = undefined
  endif
 else
-  $(2)_DL_VERSION = $$($(2)_VERSION)
-  $(2)_VERSION := $$(subst /,_,$$($(2)_VERSION))
+  $(2)_DL_VERSION := $$(strip $$($(2)_VERSION))
+  $(2)_VERSION := $$(strip $$(subst /,_,$$($(2)_VERSION)))
 endif
 
 $(2)_BASE_NAME	=  $(1)-$$($(2)_VERSION)
@@ -644,10 +649,12 @@ ifneq ($$($(2)_SITE_METHOD),override)
 # Packages that have a tarball need it downloaded beforehand
 $(1)-legal-info: $(1)-source $$(REDIST_SOURCES_DIR_$$(call UPPERCASE,$(4)))
 $(2)_MANIFEST_TARBALL = $$($(2)_SOURCE)
+$(2)_MANIFEST_SITE = $$(call qstrip,$$($(2)_SITE))
 endif
 endif
 endif
 $(2)_MANIFEST_TARBALL ?= not saved
+$(2)_MANIFEST_SITE ?= not saved
 
 # legal-info: produce legally relevant info.
 $(1)-legal-info:
@@ -685,7 +692,7 @@ ifeq ($$($(2)_REDISTRIBUTE),YES)
 endif # redistribute
 
 endif # other packages
-	@$$(call legal-manifest,$$($(2)_RAWNAME),$$($(2)_VERSION),$$($(2)_LICENSE),$$($(2)_MANIFEST_LICENSE_FILES),$$($(2)_MANIFEST_TARBALL),$$(call UPPERCASE,$(4)))
+	@$$(call legal-manifest,$$($(2)_RAWNAME),$$($(2)_VERSION),$$($(2)_LICENSE),$$($(2)_MANIFEST_LICENSE_FILES),$$($(2)_MANIFEST_TARBALL),$$($(2)_MANIFEST_SITE),$$(call UPPERCASE,$(4)))
 endif # ifneq ($$(call qstrip,$$($(2)_SOURCE)),)
 	$$(foreach hook,$$($(2)_POST_LEGAL_INFO_HOOKS),$$(call $$(hook))$$(sep))
 
@@ -699,6 +706,22 @@ ifneq ($$($(2)_PROVIDES),)
 $$(foreach pkg,$$($(2)_PROVIDES),\
 	$$(eval $$(call virt-provides-single,$$(pkg),$$(call UPPERCASE,$$(pkg)),$(1))$$(sep)))
 endif
+
+# Ensure unified variable name conventions between all packages Some
+# of the variables are used by more than one infrastructure; so,
+# rather than duplicating the checks in each infrastructure, we check
+# all variables here in pkg-generic, even though pkg-generic should
+# have no knowledge of infra-specific variables.
+$(eval $(call check-deprecated-variable,$(2)_MAKE_OPT,$(2)_MAKE_OPTS))
+$(eval $(call check-deprecated-variable,$(2)_INSTALL_OPT,$(2)_INSTALL_OPTS))
+$(eval $(call check-deprecated-variable,$(2)_INSTALL_TARGET_OPT,$(2)_INSTALL_TARGET_OPTS))
+$(eval $(call check-deprecated-variable,$(2)_INSTALL_STAGING_OPT,$(2)_INSTALL_STAGING_OPTS))
+$(eval $(call check-deprecated-variable,$(2)_INSTALL_HOST_OPT,$(2)_INSTALL_HOST_OPTS))
+$(eval $(call check-deprecated-variable,$(2)_AUTORECONF_OPT,$(2)_AUTORECONF_OPTS))
+$(eval $(call check-deprecated-variable,$(2)_CONF_OPT,$(2)_CONF_OPTS))
+$(eval $(call check-deprecated-variable,$(2)_BUILD_OPT,$(2)_BUILD_OPTS))
+$(eval $(call check-deprecated-variable,$(2)_GETTEXTIZE_OPT,$(2)_GETTEXTIZE_OPTS))
+$(eval $(call check-deprecated-variable,$(2)_KCONFIG_OPT,$(2)_KCONFIG_OPTS))
 
 TARGETS += $(1)
 

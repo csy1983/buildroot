@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-WPA_SUPPLICANT_VERSION = 2.2
+WPA_SUPPLICANT_VERSION = 2.3
 WPA_SUPPLICANT_SITE = http://hostap.epitest.fi/releases
 WPA_SUPPLICANT_LICENSE = GPLv2/BSD-3c
 WPA_SUPPLICANT_LICENSE_FILES = README
@@ -20,7 +20,6 @@ WPA_SUPPLICANT_CONFIG_EDITS =
 WPA_SUPPLICANT_CONFIG_SET =
 
 WPA_SUPPLICANT_CONFIG_ENABLE = \
-	CONFIG_ELOOP_EPOLL	\
 	CONFIG_IEEE80211AC	\
 	CONFIG_IEEE80211N	\
 	CONFIG_IEEE80211R	\
@@ -33,10 +32,10 @@ WPA_SUPPLICANT_CONFIG_DISABLE = \
 # And library order matters hence stick -lnl-3 first since it's appended
 # in the wpa_supplicant Makefiles as in LIBS+=-lnl-3 ... thus failing
 ifeq ($(BR2_PACKAGE_LIBNL),y)
-ifeq ($(BR2_PREFER_STATIC_LIB),y)
+ifeq ($(BR2_STATIC_LIBS),y)
 	WPA_SUPPLICANT_LIBS += -lnl-3 -lm -lpthread
 endif
-	WPA_SUPPLICANT_DEPENDENCIES += libnl
+	WPA_SUPPLICANT_DEPENDENCIES += host-pkgconf libnl
 	WPA_SUPPLICANT_CONFIG_ENABLE += CONFIG_LIBNL32
 else
 	WPA_SUPPLICANT_CONFIG_DISABLE += CONFIG_DRIVER_NL80211
@@ -67,7 +66,7 @@ endif
 # Try to use openssl if it's already available
 ifeq ($(BR2_PACKAGE_OPENSSL),y)
 	WPA_SUPPLICANT_DEPENDENCIES += openssl
-	WPA_SUPPLICANT_LIBS += $(if $(BR2_PREFER_STATIC_LIB),-lcrypto -lz)
+	WPA_SUPPLICANT_LIBS += $(if $(BR2_STATIC_LIBS),-lcrypto -lz)
 	WPA_SUPPLICANT_CONFIG_EDITS += 's/\#\(CONFIG_TLS=openssl\)/\1/'
 else
 	WPA_SUPPLICANT_CONFIG_DISABLE += CONFIG_EAP_PWD

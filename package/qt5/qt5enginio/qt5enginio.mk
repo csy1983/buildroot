@@ -35,7 +35,7 @@ define QT5ENGINIO_INSTALL_STAGING_CMDS
 	$(QT5_LA_PRL_FILES_FIXUP)
 endef
 
-ifeq ($(BR2_PACKAGE_QT5DECLARATIVE),y)
+ifeq ($(BR2_PACKAGE_QT5DECLARATIVE_QUICK),y)
 define QT5ENGINIO_INSTALL_TARGET_QMLS
 	cp -dpfr $(STAGING_DIR)/usr/qml/Enginio $(TARGET_DIR)/usr/qml/
 endef
@@ -47,7 +47,7 @@ define QT5ENGINIO_INSTALL_TARGET_EXAMPLES
 endef
 endif
 
-ifneq ($(BR2_PREFER_STATIC_LIB),y)
+ifneq ($(BR2_STATIC_LIBS),y)
 define QT5ENGINIO_INSTALL_TARGET_LIBS
 	cp -dpf $(STAGING_DIR)/usr/lib/libEnginio.so.* $(TARGET_DIR)/usr/lib
 endef
