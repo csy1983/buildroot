@@ -64,6 +64,7 @@ NODEJS_ARM_FP = soft
 else
 NODEJS_ARM_FP = softfp
 endif
+NODEJS_ARM_FP = hard
 endif
 
 define NODEJS_CONFIGURE_CMDS
